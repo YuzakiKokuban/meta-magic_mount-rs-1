@@ -95,7 +95,7 @@ fn get_root_impl() -> String {
     if ksucalls::KSU.load(std::sync::atomic::Ordering::Relaxed) {
         format!("✅KernelSU ({})", ksu::version().unwrap())
     } else if let Ok(ver) = fs::read_to_string(defs::AP_VERSION) {
-        format!("✅APatch ({})", ver)
+        format!("✅APatch ({ver})")
     } else {
         "❌ Unknown root implementation".to_string()
     }
@@ -113,44 +113,37 @@ pub fn update_desc(
     );
 
     if ksucalls::KSU.load(std::sync::atomic::Ordering::Relaxed) {
-        let result = Command::new("ksud")
+        Command::new("ksud")
             .arg("module")
             .arg("config")
             .arg("set")
             .arg("override.description")
             .arg(&text)
-            .output();
+            .status()?;
+    } else {
+        let prop = fs::read_to_string(defs::MODULE_PROP)?;
 
-        if let Ok(ret) = result
-            && ret.status.success()
+        if let Ok(mut f) = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .truncate(true)
+            .open(defs::MODULE_PROP)
         {
-            return Ok(());
+            let new: Vec<String> = prop
+                .lines()
+                .map(|l| {
+                    if l.starts_with("description") {
+                        format!("description={text}")
+                    } else {
+                        l.to_string()
+                    }
+                })
+                .collect();
+
+            f.write_all(new.join("\n").as_bytes())
+                .map_err(|e| log::error!("Failed to update description: {e}"))
+                .unwrap();
         }
     }
-
-    let prop = fs::read_to_string(defs::MODULE_PROP)?;
-
-    if let Ok(mut f) = fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .truncate(true)
-        .open(defs::MODULE_PROP)
-    {
-        let new: Vec<String> = prop
-            .lines()
-            .map(|l| {
-                if l.starts_with("description") {
-                    format!("description={text}")
-                } else {
-                    l.to_string()
-                }
-            })
-            .collect();
-
-        f.write_all(new.join("\n").as_bytes())
-            .map_err(|e| log::error!("Failed to update description: {e}"))
-            .unwrap();
-    }
-
     Ok(())
 }
