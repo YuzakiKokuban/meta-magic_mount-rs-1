@@ -114,6 +114,7 @@ pub fn update_desc(files: u32, symbols: u32) {
     if let Ok(mut f) = fs::OpenOptions::new()
         .read(true)
         .write(true)
+        .truncate(true)
         .open(defs::MODULE_PROP)
     {
         let buf = BufReader::new(&f);
