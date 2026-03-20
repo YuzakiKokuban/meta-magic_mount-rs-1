@@ -349,11 +349,12 @@ where
 
                 let mut ksu = LIST.lock().unwrap();
                 ksu.flags(TryUmountFlags::MNT_DETACH);
+                ksu.add(&tmp_dir);
                 ksu.format_msg(|p| format!("umount {p:?} successful"));
                 ksu.umount()?;
             }
         }
-        fs::remove_dir(tmp_dir).ok();
+        fs::remove_dir(&tmp_dir).ok();
     } else {
         log::info!("no modules to mount, skipping!");
     }
