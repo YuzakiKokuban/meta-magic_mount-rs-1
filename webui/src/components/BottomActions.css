@@ -4,19 +4,22 @@
  */
 
 .bottom-actions-root {
-  position: absolute;
+  position: sticky;
   bottom: 0;
   left: 0;
   right: 0;
   display: flex;
   align-items: center;
-  padding: 16px 24px calc(16px + var(--safe-area-inset-bottom, 0px)) 24px;
+  padding: 12px 0 calc(8px + var(--safe-area-inset-bottom, 0px)) 0;
   gap: 16px;
   z-index: 90;
   pointer-events: none;
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+  margin-top: auto;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--md-sys-color-background) 92%, transparent),
+    transparent
+  );
 }
 .bottom-actions-root > * {
   pointer-events: auto;
@@ -25,10 +28,5 @@
 .bottom-actions-root > .spacer {
   flex: 1;
   pointer-events: none;
-}
-
-.bottom-actions-root.is-keyboard-open {
-  opacity: 0;
-  transform: translateY(16px);
-  pointer-events: none;
+  box-shadow: none;
 }

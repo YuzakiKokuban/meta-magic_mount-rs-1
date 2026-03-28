@@ -46,8 +46,19 @@ export default function ChipInput(props: ChipInputProps) {
     props.onChange?.(newValues);
   }
 
+  function stopSwipePropagation(e: TouchEvent) {
+    e.stopPropagation();
+  }
+
   return (
-    <div class="chip-input-container">
+    <div
+      class="chip-input-container"
+      data-disable-tab-swipe="true"
+      onTouchStart={stopSwipePropagation}
+      onTouchMove={stopSwipePropagation}
+      onTouchEnd={stopSwipePropagation}
+      onTouchCancel={stopSwipePropagation}
+    >
       <For each={props.values}>
         {(val, i) => (
           <span class="chip">
@@ -75,12 +86,6 @@ export default function ChipInput(props: ChipInputProps) {
         onInput={(e) => setInputValue(e.currentTarget.value)}
         onKeyDown={handleKeydown}
         onBlur={addChip}
-        onFocus={(e) => {
-          const target = e.currentTarget;
-          setTimeout(() => {
-            target.scrollIntoView({ behavior: "smooth", block: "center" });
-          }, 300);
-        }}
         placeholder={props.placeholder ?? "Add item..."}
         enterkeyhint="done"
       />

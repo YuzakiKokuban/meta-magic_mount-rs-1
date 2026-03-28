@@ -24,6 +24,9 @@ export default function App() {
   const [isDragging, setIsDragging] = createSignal(false);
   const [containerWidth, setContainerWidth] = createSignal(0);
   const [isReady, setIsReady] = createSignal(false);
+  const [dragAxisLocked, setDragAxisLocked] = createSignal<"x" | "y" | null>(
+    null,
+  );
   let touchStartX = 0;
   let touchStartY = 0;
 
@@ -44,6 +47,8 @@ export default function App() {
       }
       if (
         node.matches("input, textarea, select, md-outlined-text-field") ||
+        node.matches("[data-disable-tab-swipe='true']") ||
+        !!node.closest("[data-disable-tab-swipe='true']") ||
         node.isContentEditable ||
         !!node.closest(
           "input, textarea, select, [contenteditable='true'], md-outlined-text-field",
@@ -71,6 +76,7 @@ export default function App() {
     touchStartX = e.changedTouches[0].screenX;
     touchStartY = e.changedTouches[0].screenY;
     setIsDragging(true);
+    setDragAxisLocked(null);
     setDragOffset(0);
   }
 
@@ -82,7 +88,18 @@ export default function App() {
     const currentY = e.changedTouches[0].screenY;
     let diffX = currentX - touchStartX;
     const diffY = currentY - touchStartY;
-    if (Math.abs(diffY) > Math.abs(diffX)) {
+
+    if (dragAxisLocked() === null) {
+      if (Math.abs(diffX) < 8 && Math.abs(diffY) < 8) {
+        return;
+      }
+      setDragAxisLocked(Math.abs(diffX) >= Math.abs(diffY) ? "x" : "y");
+    }
+
+    if (dragAxisLocked() === "y") {
+      setIsDragging(false);
+      setDragOffset(0);
+
       return;
     }
     if (e.cancelable) {
@@ -100,6 +117,8 @@ export default function App() {
 
   function handleTouchEnd() {
     if (!isDragging()) {
+      setDragAxisLocked(null);
+
       return;
     }
     setIsDragging(false);
@@ -114,6 +133,7 @@ export default function App() {
     if (nextIndex !== currentIndex) {
       switchTab(TABS[nextIndex].id);
     }
+    setDragAxisLocked(null);
     setDragOffset(0);
   }
 
