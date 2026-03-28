@@ -15,11 +15,6 @@
   z-index: 90;
   pointer-events: none;
   margin-top: auto;
-  background: linear-gradient(
-    to top,
-    color-mix(in srgb, var(--md-sys-color-background) 92%, transparent),
-    transparent
-  );
 }
 .bottom-actions-root > * {
   pointer-events: auto;
