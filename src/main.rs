@@ -137,22 +137,6 @@ fn main() -> Result<()> {
                 println!("{}", serde_json::to_string(&modules)?);
                 return Ok(());
             }
-            "scan" => {
-                let config = Config::load_or_default()?;
-                let modules = scanner::scan_modules(MODULE_PATH, &config.partitions);
-
-                if let Some(s) = args.get(2)
-                    && s.as_str() == "--json"
-                {
-                    let json = serde_json::to_string(&modules)?;
-                    println!("{json}");
-                } else {
-                    for module in modules {
-                        println!("{}", module.id);
-                    }
-                }
-                return Ok(());
-            }
             "version" => {
                 println!("{{ \"version\": \"{}\" }}", env!("CARGO_PKG_VERSION"));
                 return Ok(());

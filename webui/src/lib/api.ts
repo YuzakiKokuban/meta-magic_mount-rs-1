@@ -41,20 +41,6 @@ function stringToHex(str: string): string {
   return hex;
 }
 
-function isTrueValue(v: unknown): boolean {
-  const s = String(v).trim().toLowerCase();
-
-  return s === "1" || s === "true" || s === "yes" || s === "on";
-}
-
-function stripQuotes(v: string): string {
-  if (v.startsWith('"') && v.endsWith('"')) {
-    return v.slice(1, -1);
-  }
-
-  return v;
-}
-
 function normalizeConfigPayload(payload: Record<string, unknown>): AppConfig {
   const ignoreListSource = Array.isArray(payload.ignoreList)
     ? payload.ignoreList
@@ -87,90 +73,11 @@ function normalizeConfigPayload(payload: Record<string, unknown>): AppConfig {
   };
 }
 
-function parseKvConfig(text: string): AppConfig {
-  try {
-    const result: AppConfig = { ...DEFAULT_CONFIG };
-    const lines = text.split("\n");
-
-    for (let line of lines) {
-      line = line.trim();
-
-      if (!line || line.startsWith("#")) {
-        continue;
-      }
-
-      const eqIndex = line.indexOf("=");
-
-      if (eqIndex === -1) {
-        continue;
-      }
-
-      const key = line.slice(0, eqIndex).trim();
-      let value = line.slice(eqIndex + 1).trim();
-
-      if (!key || !value) {
-        continue;
-      }
-
-      if (value.startsWith("[") && value.endsWith("]")) {
-        value = value.slice(1, -1);
-
-        if (!value.trim()) {
-          if (key === "partitions") {
-            result.partitions = [];
-          }
-
-          continue;
-        }
-
-        const parts = value.split(",").map((s) => stripQuotes(s.trim()));
-
-        if (key === "partitions") {
-          result.partitions = parts;
-        }
-
-        continue;
-      }
-
-      const rawValue = value;
-
-      value = stripQuotes(value);
-
-      switch (key) {
-        case "mountsource": {
-          result.mountsource = value;
-          break;
-        }
-        case "umount": {
-          result.umount = isTrueValue(rawValue);
-          break;
-        }
-      }
-    }
-
-    return result;
-  } catch {
-    return { ...DEFAULT_CONFIG };
-  }
-}
-
-function serializeKvConfig(config: AppConfig): string {
-  const q = (s: string) => `"${s}"`;
-  const lines = ["", ""];
-
-  lines.push(`mountsource = ${q(config.mountsource)}`);
-  lines.push(`umount = ${config.umount}`);
-
-  const parts = config.partitions.map((partition) => q(partition)).join(", ");
-  lines.push(`partitions = [${parts}]`);
-
-  return lines.join("\n");
-}
-
 function createStandardConfigPayload(config: AppConfig) {
   return {
     mountsource: config.mountsource,
     partitions: config.partitions,
+    ignoreList: config.ignoreList,
     disable_umount: !config.umount,
   };
 }
@@ -225,39 +132,6 @@ function normalizeModule(module: Record<string, unknown>): Module {
   };
 }
 
-async function readIgnoreList() {
-  try {
-    const { errno, stdout } = await ksuExec!(
-      `[ -f "${PATHS.IGNORE_LIST}" ] && cat "${PATHS.IGNORE_LIST}" || echo ""`,
-    );
-
-    if (errno === 0 && stdout) {
-      return stdout
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean);
-    }
-  } catch {}
-
-  return [] as string[];
-}
-
-async function writeIgnoreList(ignoreList: string[]) {
-  const ignoreContent = ignoreList.join("\n");
-  const cmd = `
-    mkdir -p "$(dirname "${PATHS.IGNORE_LIST}")"
-    cat > "${PATHS.IGNORE_LIST}" << 'EOF_IGNORE'
-${ignoreContent}
-EOF_IGNORE
-    chmod 644 "${PATHS.IGNORE_LIST}"
-  `;
-  const { errno, stderr } = await ksuExec!(cmd);
-
-  if (errno !== 0) {
-    throw new Error(stderr);
-  }
-}
-
 function formatBytes(bytes: number, decimals = 2): string {
   if (!+bytes) {
     return "0 B";
@@ -273,94 +147,36 @@ function formatBytes(bytes: number, decimals = 2): string {
 
 const RealAPI: AppAPI = {
   loadConfig: async () => {
-    let config: AppConfig = { ...DEFAULT_CONFIG };
+    const { errno, stdout, stderr } = await ksuExec!(`${PATHS.BINARY} show-config`);
 
-    try {
-      const { errno, stdout } = await ksuExec!(`${PATHS.BINARY} show-config`);
-
-      if (errno === 0 && stdout.trim()) {
-        config = normalizeConfigPayload(JSON.parse(stdout));
-      } else {
-        throw new Error("show-config unavailable");
-      }
-    } catch {
-      try {
-        const { errno, stdout } = await ksuExec!(
-          `[ -f "${PATHS.CONFIG}" ] && cat "${PATHS.CONFIG}" || echo ""`,
-        );
-
-        if (errno === 0 && stdout.trim()) {
-          config = parseKvConfig(stdout);
-        }
-      } catch {}
+    if (errno === 0 && stdout.trim()) {
+      return normalizeConfigPayload(JSON.parse(stdout));
     }
 
-    config.ignoreList = await readIgnoreList();
-
-    return config;
+    throw new Error(stderr || "show-config failed");
   },
 
   saveConfig: async (config) => {
-    let usedFallback = false;
+    const payload = stringToHex(JSON.stringify(createStandardConfigPayload(config)));
+    const { errno, stderr } = await ksuExec!(
+      `${PATHS.BINARY} save-config --payload ${payload}`,
+    );
 
-    try {
-      const payload = stringToHex(
-        JSON.stringify(createStandardConfigPayload(config)),
-      );
-      const { errno, stderr } = await ksuExec!(
-        `${PATHS.BINARY} save-config --payload ${payload}`,
-      );
-
-      if (errno !== 0) {
-        throw new Error(stderr);
-      }
-    } catch {
-      usedFallback = true;
-
-      const content = serializeKvConfig(config);
-      const cmd = `
-        mkdir -p "$(dirname "${PATHS.CONFIG}")"
-        cat > "${PATHS.CONFIG}" << 'EOF_CONFIG'
-${content}
-EOF_CONFIG
-        chmod 644 "${PATHS.CONFIG}"
-      `;
-      const { errno, stderr } = await ksuExec!(cmd);
-
-      if (errno !== 0) {
-        throw new Error(stderr);
-      }
-    }
-
-    await writeIgnoreList(config.ignoreList);
-
-    if (usedFallback) {
-      return;
+    if (errno !== 0) {
+      throw new Error(stderr || "save-config failed");
     }
   },
 
   scanModules: async () => {
-    try {
-      const { errno, stdout } = await ksuExec!(`${PATHS.BINARY} modules`);
+    const { errno, stdout, stderr } = await ksuExec!(`${PATHS.BINARY} modules`);
 
-      if (errno === 0 && stdout) {
-        return JSON.parse(stdout).map((module: Record<string, unknown>) =>
-          normalizeModule(module),
-        );
-      }
-    } catch {}
+    if (errno === 0 && stdout) {
+      return JSON.parse(stdout).map((module: Record<string, unknown>) =>
+        normalizeModule(module),
+      );
+    }
 
-    try {
-      const { errno, stdout } = await ksuExec!(`${PATHS.BINARY} scan --json`);
-
-      if (errno === 0 && stdout) {
-        return JSON.parse(stdout).map((module: Record<string, unknown>) =>
-          normalizeModule(module),
-        );
-      }
-    } catch {}
-
-    return [];
+    throw new Error(stderr || "modules failed");
   },
 
   getStorageUsage: async () => {

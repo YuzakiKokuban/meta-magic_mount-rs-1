@@ -31,17 +31,6 @@ struct ModuleRecord {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ModuleInfo {
-    pub id: String,
-    name: String,
-    version: String,
-    author: String,
-    description: String,
-    disabled: bool,
-    skip: bool,
-}
-
-#[derive(Debug, Serialize)]
 pub struct ModuleRules {
     default_mode: String,
     paths: BTreeMap<String, String>,
@@ -154,30 +143,6 @@ where
     modules.sort_by(|a, b| a.id.cmp(&b.id));
 
     modules
-}
-
-/// Scans for modules that will be actually mounted by `magic_mount`.
-/// Filters out modules that:
-/// 1. Do not have a modified partition directory.
-/// 2. Are disabled or removed.
-/// 3. Have the `skip_mount` flag.
-pub fn scan_modules<P>(module_dir: P, extra: &[String]) -> Vec<ModuleInfo>
-where
-    P: AsRef<Path>,
-{
-    collect_modules(module_dir, extra)
-        .into_iter()
-        .filter(|module| module.has_mount_files && !module.disabled && !module.skip_mount)
-        .map(|module| ModuleInfo {
-            id: module.id,
-            name: module.name,
-            version: module.version,
-            author: module.author,
-            description: module.description,
-            disabled: module.disabled,
-            skip: module.skip_mount,
-        })
-        .collect()
 }
 
 pub fn list_modules<P>(module_dir: P, extra: &[String]) -> Vec<AppModule>
